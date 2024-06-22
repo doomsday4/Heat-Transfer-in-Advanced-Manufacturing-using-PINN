@@ -15,9 +15,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy import interpolate
 from scipy.interpolate import interp2d
 
-import tensorflow as tf
-import numpy as np
-
 class SolidificationPINN:
     def __init__(self, x0, tem0, tb, X_f, X_tem, layers, lb, ub):
         
