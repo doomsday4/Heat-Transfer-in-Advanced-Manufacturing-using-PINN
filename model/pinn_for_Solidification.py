@@ -1,5 +1,4 @@
 import sys
-
 import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
 import tensorflow_probability as tfp
@@ -154,58 +153,6 @@ class SolidificationPINN:
 
         return tem
 
-    # def net_f_uv(self, x, t):
-    #     tem = self.net_uv(x,t)
-
-    #     one  = tf.ones_like(tem)
-    #     zero = tf.zeros_like(tem)
-
-    #     rho_Al_liquid = 2555.0*one
-    #     rho_Al_solid  = 2555.0*one
-    #     rho_grap      = 2200.0*one
-
-    #     kappa_Al_liquid = 91.0*one
-    #     kappa_Al_solid  = 211.0*one
-    #     kappa_grap      = 100.0*one
-
-    #     cp_Al_liquid = 1190.0*one
-    #     cp_Al_solid  = 1190.0*one
-    #     cp_grap      = 1700.0*one
-
-    #     cl_Al_liquid = 3.98e5*one
-    #     cl_Al_solid  = 3.98e5*one
-    #     cl_grap      = 3.98e5*one
-
-    #     # what is value of Ts #
-    #     Ts = 913.15*one
-    #     Tl = 933.15*one
-
-    #     with tf.GradientTape(persistent=True) as tape:
-    #         tape.watch([x, t])
-    #         tem = self.net_uv(x, t)
-    #         tem_t = tape.gradient(tem, t)
-    #         tem_x = tape.gradient(tem, x)
-
-    #     fL = (tem - Ts) / (Tl - Ts)
-    #     fL = tf.clip_by_value(fL, 0.0, 1.0)
-
-    #     with tf.GradientTape() as tape:
-    #         tape.watch(t)
-    #         fL_t = tape.gradient(fL, t)
-
-    #     rho = tf.where(tf.greater(x, 0), rho_Al_liquid * fL + rho_Al_solid * (1.0 - fL), rho_grap)
-    #     kappa = tf.where(tf.greater(x, 0), kappa_Al_liquid * fL + kappa_Al_solid * (1.0 - fL), kappa_grap)
-    #     cp = tf.where(tf.greater(x, 0), cp_Al_liquid * fL + cp_Al_solid * (1.0 - fL), cp_grap)
-    #     cl = tf.where(tf.greater(x, 0), cl_Al_liquid * fL + cl_Al_solid * (1.0 - fL), cl_grap)
-
-    #     with tf.GradientTape() as tape:
-    #         tape.watch(x)
-    #         lap = tape.gradient(kappa * tem_x, x)
-
-    #     f_tem = (rho * cp * tem_t + rho * cl * fL_t - lap) / (rho_Al_solid * kappa_Al_solid)
-
-    #     return f_tem
-
     def net_f_uv(self, x, t):
         tem = self.net_uv(x, t)
 
@@ -245,12 +192,6 @@ class SolidificationPINN:
 
         lap = tf.gradients(kappa * tem_x, x)[0]
 
-        # # Check for None values
-        # assert tem_t is not None, "tem_t is None"
-        # assert tem_x is not None, "tem_x is None"
-        # assert fL_t is not None, "fL_t is None"
-        # assert lap is not None, "lap is None"
-
         f_tem = (rho * cp * tem_t + rho * cl * fL_t - lap) / (rho_Al_solid * kappa_Al_solid)
 
         return f_tem
@@ -259,6 +200,7 @@ class SolidificationPINN:
         print('Loss:', loss)
 
     def train(self, nIter_pre, nIter):
+        losses = []
 
         @tf.function
         def train_step_Adam_pre():
@@ -284,7 +226,6 @@ class SolidificationPINN:
                 return loss_value, gradients
         
             tfp.optimizer.lbfgs_minimize(get_loss_and_grads, initial_position=variables)
-
 
         it = 0
         tf_dict = {self.x0_tf: self.x0, self.t0_tf: self.t0,
@@ -314,6 +255,9 @@ class SolidificationPINN:
         start_time = time.time()
         for it in range(nIter):
             self.sess.run(self.train_op_Adam, tf_dict)
+
+            loss_value = self.sess.run(self.loss, tf_dict)
+            losses.append(loss_value)
             
             # Print
             if it % 1000 == 0:
@@ -323,9 +267,10 @@ class SolidificationPINN:
                     (it, loss_value, elapsed))
                 sys.stdout.flush()
                 start_time = time.time()
-                                                                                                        
+        np.savetxt('training_losse_layers=8_lr=0.001_hn=200_epochs=50000.txt', losses)                                                                                  
         # if nIter > 0:
         #     scipy_lbfgs_optimizer(lambda: self.loss, tf_dict)
+        return losses
 
 
     def predict(self, X_star):
@@ -343,13 +288,6 @@ class SolidificationPINN:
     def load_model(self, path):
         self.saver.restore(self.sess, path)
         print(f"Model restored from path: {path}")
-
-import numpy as np
-import scipy.io
-from scipy.interpolate import interp2d
-import time
-from pyDOE import lhs
-import tensorflow as tf
 
 if __name__ == "__main__":
     noise = 0.0
@@ -369,7 +307,7 @@ if __name__ == "__main__":
     N_b = 100
     N_f = 10000
     num_hidden = 8
-    layers = [2] + num_hidden * [300] + [1]
+    layers = [2] + num_hidden * [200] + [1]
 
     data = scipy.io.loadmat('project_pinn/thermal_fine.mat')
 
@@ -398,7 +336,7 @@ if __name__ == "__main__":
     model = SolidificationPINN(x0, tem0, tb, X_f, X_tem, layers, lb, ub)
 
     start_time = time.time()
-    model.train(-1, 50000)
+    losses = model.train(-1, 50000)
     elapsed = time.time() - start_time
     
     print('Training time: %.4f' % (elapsed))
@@ -407,6 +345,15 @@ if __name__ == "__main__":
     np.savetxt('predict_xT.txt', X_star)
     np.savetxt('predict_tem.txt', tem_pred)
     np.savetxt('predict_ftem.txt', ftem_pred)
+
+    # Plot training loss curve
+    plt.figure()
+    plt.plot(losses)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.grid(True)
+    plt.savefig('training_loss_curve.png')
 
     # model.save_model('model_checkpoint.ckpt')
     # model.load_model('model_checkpoint.ckpt')
