@@ -272,14 +272,16 @@ class SolidificationPINN:
                                                                                                         
         # if nIter_pre > 0:
         #     scipy_lbfgs_optimizer(lambda: self.loss_pre, tf_dict)
-
+        threshold = 1
         start_time = time.time()
         for it in range(nIter):
             self.sess.run(self.train_op_Adam, tf_dict)
 
             loss_value = self.sess.run(self.loss, tf_dict)
             losses.append(loss_value)
-            
+            if (loss_value <= threshold) :
+                print("Training Completed with threshold = " + threshold)
+                break
             # Print
             if it % 1000 == 0:
                 elapsed = time.time() - start_time
@@ -288,7 +290,7 @@ class SolidificationPINN:
                     (it, loss_value, elapsed))
                 sys.stdout.flush()
                 start_time = time.time()
-        np.savetxt('training_losse_layers=8_lr=0.001_hn=200_epochs=50000.txt', losses)                                                                                  
+        np.savetxt('training_losse_layers=8_lr=0.001_hn=200_epochs=25000.txt', losses)                                                                                  
         # if nIter > 0:
         #     scipy_lbfgs_optimizer(lambda: self.loss, tf_dict)
         return losses
