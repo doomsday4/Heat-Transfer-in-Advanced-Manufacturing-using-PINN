@@ -79,11 +79,32 @@ class SolidificationPINN:
         self.loss_pre = tf.reduce_mean(tf.square(self.X_tem_pred - self.X_tem_tf))
         self.loss = tf.reduce_mean(tf.square(self.tem0_pred - self.tem0_tf)) + 1.0e-3 * tf.reduce_mean(tf.square(self.f_tem_pred))
 
+        self.global_step = tf.Variable(0, trainable=False, dftype=tf.int64)
+        self.decayed_lr = tf.compat.v1.train.exponential_decay(
+            learning_rate = 0.1,
+            global_step=self.global_step,
+            decay_steps=2000,
+            decay_rate=0.1,
+            staircase=True
+        )
+
+        self.decayed_lr2 = tf.compat.v1.train.cosine_decay(
+            learning_rate=0.001, 
+            global_step=self.global_step, 
+            decay_steps=5000,  # adjust as needed
+        )
+
+        self.decayed_lr3 = tf.compat.v1.train.polynomial_decay(
+            learning_rate=0.001,
+            global_step=self.global_step,
+            decay_steps=5000,  # adjust as needed
+            end_learning_rate=0.0001,
+            power=2.0,
+            cycle=False
+        )
+
         self.optimizer_Adam = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001)
         self.train_op_Adam = self.optimizer_Adam.minimize(self.loss)
-
-        # Delayed LR not yet applied
-        # decayed_lr = tf.train.exponential_decay( 0.001,self.global_step, 1000, 0.95, staircase=True)
 
         self.sess = tf.compat.v1.Session()
         init = tf.compat.v1.global_variables_initializer()
